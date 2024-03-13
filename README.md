@@ -4,6 +4,8 @@
 
 ## 简单     
 
+https://leetcode.cn/problemset/?difficulty=EASY&page=1   
+
 |编号|名称|  地址 |   
 |----|---|-------|    
 |2864| 最大二进制奇数| https://leetcode.cn/problems/maximum-odd-binary-number?envType=daily-question&envId=2024-03-13|   
