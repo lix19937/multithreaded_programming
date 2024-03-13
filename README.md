@@ -7,5 +7,5 @@
 |编号|名称|  地址 |   
 |----|---|-------|    
 |2864| 最大二进制奇数| https://leetcode.cn/problems/maximum-odd-binary-number?envType=daily-question&envId=2024-03-13|   
-|1|两数之和|  |    
-|9|回文数|  |    
+|1|两数之和|https://leetcode.cn/problems/two-sum  |    
+|9|回文数|https://leetcode.cn/problems/palindrome-number  |    
