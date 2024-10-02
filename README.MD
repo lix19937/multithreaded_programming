@@ -12,7 +12,7 @@
 | [04_pthread_detach](04_pthread_detach)  | detach |    |
 | [05_pthread_affinity](05_pthread_affinity)  | affinity |    |
 | [06_condition_variable_stl](06_condition_variable_stl)  | condition_variable |    |
-| [07_join](07_join) | pthread_join |    |
+| [07_join](07_join) | pthread_join/std::thread join |    |
 | [08_mpmc](08_mpmc) | multi-producer multi-consumer |    |
 | [09_mpmc_stl](09_mpmc_stl) | multi-producer multi-consumer |    |
 | [10_mpmc_sem](10_mpmc_sem) | sem |    |
