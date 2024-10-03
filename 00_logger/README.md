@@ -1,5 +1,5 @@
 # logger       
-warpper for printf   
+warpper of printf   
 
 ## compile & run   
 
