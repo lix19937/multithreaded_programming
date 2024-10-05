@@ -1,6 +1,5 @@
 
-#include <stdlib.h>
-#include <iostream>
+#include <unistd.h>
 #include <string>
 #include <thread>
 
@@ -9,20 +8,20 @@ void task1(std::string msg) {
 }
 
 int test() {
-  std::thread t1(task1, "hello");
+  std::thread t1(task1, "hello1");
   t1.join();
   return 0;
 }
 
-// will error
+// will error, raise `terminate called without an active exception`
 int test2() {
-  std::thread t1(task1, "hello");
+  std::thread t1(task1, "hello2");
   return 0;
 }
 
 int test3() {
   {
-    std::thread t1(task1, "hello");
+    std::thread t1(task1, "hello3");
     t1.detach();
   }
 
@@ -31,7 +30,11 @@ int test3() {
 }
 
 int main() {
-  return test();
+  test();
+  test3();
+  test2();
+
+  return 0;
 }
 
 /*
