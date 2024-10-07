@@ -1,10 +1,14 @@
+
 #include <chrono>
 #include <condition_variable>
+#include <map>
 #include <mutex>
 #include <queue>
 #include <thread>
 #include <vector>
 #include "logger.hpp"
+
+//  conditional variable together with unique_lock always
 
 struct Package {
   int id;
@@ -12,18 +16,21 @@ struct Package {
 };
 
 int global_id = 0;
-int min_count = 10;
+int min_count = 4;
 
 std::queue<Package> q_;
 std::mutex mtx_;
 std::condition_variable cv_;
 
+std::mutex hist_mtx_;
+std::map<pthread_t, int> hist_table_;
+
 void* produce(void* args) {
-  while (true) {
+  while (1) {
     { /*
        *
-       * 通过在函数中设置block {}, 让unique_lock的生命周期只在这个block内
-       * 当block结束的时候，自动释放 unique_lock，实现上锁解锁
+       * use block {}, let unique_lock life time within block
+       * when block over，auto release unique_lock
        *
        */
       std::unique_lock<std::mutex> lock(mtx_);
@@ -31,43 +38,77 @@ void* produce(void* args) {
       p.id = global_id;
       p.status = "newly produced";
       q_.push(p);
-      LOGI(PURPLE "[Producer]:Produce pushed package %d, queue size is %d", p.id, q_.size());
-      global_id++;
+      ++global_id;
+      LOGI(PURPLE "[Producer]:pushed package_%d, queue size is %d", p.id, q_.size());
+
       if (q_.size() >= min_count) {
         LOGI(RED "[Producer]:Activate all blocked threads");
-        cv_.notify_all();
+        cv_.notify_all(); // eq pthread_cond_broadcast
       }
     }
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
   }
+  return NULL;
 }
 
 void* consume(void* args) {
-  while (true) {
+  auto tid = pthread_self();
+
+  // for debug to show which consumer to pop
+  {
+    std::unique_lock<std::mutex> lock(hist_mtx_);
+    int len = hist_table_.size();
+    if (hist_table_.find(tid) == hist_table_.end()) {
+      hist_table_.insert(std::make_pair(tid, len));
+    }
+  }
+
+  // for debug to show which way to lead to pop
+  bool is_cv_notice_state;
+
+  while (1) {
     {
+      is_cv_notice_state = false;
+
+      LOGI("tid:%ld ->         consumer_%d started a new iter", tid, hist_table_[tid]);
+
       std::unique_lock<std::mutex> lock(mtx_);
+      LOGI("tid:%ld -->>>      consumer_%d acquired lock, other consumers blocked", tid, hist_table_[tid]);
+
+      // when queue is empty, cv.wait
       while (q_.empty()) {
-        LOGI(RED "[Consumer]:The thread is blocked, waiting ...");
-        cv_.wait(lock);
+        LOGI(RED "tid:%ld ---------- consumer_%d thread is blocked, waiting...", tid, hist_table_[tid]);
+        cv_.wait(lock); // eq pthread_cond_wait
+        is_cv_notice_state = true;
+      }
+
+      if (is_cv_notice_state) {
+        LOGI("tid:%ld ----->>>>  consumer_%d unblocked by cv notice, allow to pop", tid, hist_table_[tid]);
+      } else {
+        LOGI("tid:%ld ----->>>>  consumer_%d queue is not empty, allow to pop", tid, hist_table_[tid]);
       }
 
       Package tmp = q_.front();
       q_.pop();
-      LOGI(DGREEN "[Consumer]:Nonblocking pop package %d, queue size is %d", tmp.id, q_.size());
+
+      LOGI(
+          DGREEN "tid:%ld ---------- consumer_%d poped package_%d, current length %d, will release lock",
+          tid,
+          hist_table_[tid],
+          tmp.id,
+          q_.size());
     }
 
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   }
+  return NULL;
 }
 
 /*
- * 使用c++ std库中的condition_variable, mutex, unique_lock, thread来实现CPM
- * unique_lock是mutex lock的智能指针版，内部用类似与unique_ptr的方式封装的
+ * use c++ std condition_variable, mutex, unique_lock, thread
+ * unique_lock is mutex lock shared_ptr warpper
  *
- * 解锁和上锁直接是通过unique_lock的生命周期来管理，生命周期结束自动释放，所以一般可以配合函数block来上锁/解锁
- * std::condition_variable的 wait 和 notify_all
- * 分别对应c语言版本的 pthread_cond_wait 和 pthread_cond_broadcast
  */
 int main() {
   int producer_count = 1;
