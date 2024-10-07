@@ -1,35 +1,107 @@
-# 使用c++进行多线程编程
 
-## 涉及到的知识点
-- 使用thread库的函数
-- 线程的开启和同步
-- 双线程，多线程异步执行的方法
-- 生产者/消费者模型
-- 使用conditional variable进行约束
-- 使用future和promise进行线程结果的返回
-
-## 整体的流程是这样的
-### Goal: 
-case1: 两个线程
-- 一个线程负责给queue push东西
-- 一个线程负责给queue pop东西。两个线程的速度不一样
-
-case2: 两个线程
-- 一个线程是master-thread负责获取图像
-- 另外一个线程是worker-thread负责处理图像，并且将图像进行处理之后返回给master-thread
-
-case3: 多个线程
-- 一个线程是master-thread负责获取图像
-- 另外两个线程是worker-thread负责处理图像，并且将图像进行处理之后返回给master-thread
-
-### 说明
-- this_thread::yield()的作用是让出当前线程的cpu时间片，可以让其他线程使用，可以防止资源浪费
-- 对于shared object需要通过mutex lock来进行维护
-- 当生产者生产的速度远大于消费者的消费速度的话，需要使用conditional variable来进行等待
-- conditional variable
-    - wait()
-    - notify_one()
-    - cv.wait(lock, [](){return ready;})等价于while(!ready){cv.wait(lock);}
-    - 需要注意的是，conditional variable一起绑定的lock必须是unique_lock, 而不是lock_guard
-- 异步执行
-    - 我们希望做到的是，有一个master thread和很多个worker thread。这些worker thread统一性的获取master thread的图像，之后各自做处理。处理结束以后返回给master thread，在master thread进行接下来的操作。比如绘制bbox, 绘制segmentation mask, 绘制keypoint
+## output 
+```
+2024-10-07 18:14:09 I main.cpp:42][Producer]:pushed package_0, queue size is 1
+2024-10-07 18:14:09 I main.cpp:74]tid:139772876502784 ->         consumer_1 started a new iter
+2024-10-07 18:14:09 I main.cpp:77]tid:139772876502784 -->>>      consumer_1 acquired lock, other consumers blocked
+2024-10-07 18:14:09 I main.cpp:89]tid:139772876502784 ----->>>>  consumer_1 queue is not empty, allow to pop
+2024-10-07 18:14:09 I main.cpp:95]tid:139772876502784 ---------- consumer_1 poped package_0, current length 0, will release lock
+2024-10-07 18:14:09 I main.cpp:74]tid:139772884895488 ->         consumer_0 started a new iter
+2024-10-07 18:14:09 I main.cpp:77]tid:139772884895488 -->>>      consumer_0 acquired lock, other consumers blocked
+2024-10-07 18:14:09 I main.cpp:81]tid:139772884895488 ---------- consumer_0 thread is blocked, waiting...
+2024-10-07 18:14:09 I main.cpp:74]tid:139772876502784 ->         consumer_1 started a new iter
+2024-10-07 18:14:09 I main.cpp:77]tid:139772876502784 -->>>      consumer_1 acquired lock, other consumers blocked
+2024-10-07 18:14:09 I main.cpp:81]tid:139772876502784 ---------- consumer_1 thread is blocked, waiting...
+2024-10-07 18:14:09 I main.cpp:42][Producer]:pushed package_1, queue size is 1
+2024-10-07 18:14:09 I main.cpp:42][Producer]:pushed package_2, queue size is 2
+2024-10-07 18:14:09 I main.cpp:42][Producer]:pushed package_3, queue size is 3
+2024-10-07 18:14:09 I main.cpp:42][Producer]:pushed package_4, queue size is 4
+2024-10-07 18:14:09 I main.cpp:45][Producer]:Activate all blocked threads
+2024-10-07 18:14:09 I main.cpp:87]tid:139772884895488 ----->>>>  consumer_0 unblocked by cv notice, allow to pop
+2024-10-07 18:14:09 I main.cpp:95]tid:139772884895488 ---------- consumer_0 poped package_1, current length 3, will release lock
+2024-10-07 18:14:09 I main.cpp:87]tid:139772876502784 ----->>>>  consumer_1 unblocked by cv notice, allow to pop
+2024-10-07 18:14:09 I main.cpp:95]tid:139772876502784 ---------- consumer_1 poped package_2, current length 2, will release lock
+2024-10-07 18:14:09 I main.cpp:74]tid:139772884895488 ->         consumer_0 started a new iter
+2024-10-07 18:14:09 I main.cpp:77]tid:139772884895488 -->>>      consumer_0 acquired lock, other consumers blocked
+2024-10-07 18:14:09 I main.cpp:89]tid:139772884895488 ----->>>>  consumer_0 queue is not empty, allow to pop
+2024-10-07 18:14:09 I main.cpp:95]tid:139772884895488 ---------- consumer_0 poped package_3, current length 1, will release lock
+2024-10-07 18:14:09 I main.cpp:74]tid:139772876502784 ->         consumer_1 started a new iter
+2024-10-07 18:14:09 I main.cpp:77]tid:139772876502784 -->>>      consumer_1 acquired lock, other consumers blocked
+2024-10-07 18:14:09 I main.cpp:89]tid:139772876502784 ----->>>>  consumer_1 queue is not empty, allow to pop
+2024-10-07 18:14:09 I main.cpp:95]tid:139772876502784 ---------- consumer_1 poped package_4, current length 0, will release lock
+2024-10-07 18:14:09 I main.cpp:74]tid:139772884895488 ->         consumer_0 started a new iter
+2024-10-07 18:14:09 I main.cpp:77]tid:139772884895488 -->>>      consumer_0 acquired lock, other consumers blocked
+2024-10-07 18:14:09 I main.cpp:81]tid:139772884895488 ---------- consumer_0 thread is blocked, waiting...
+2024-10-07 18:14:09 I main.cpp:74]tid:139772876502784 ->         consumer_1 started a new iter
+2024-10-07 18:14:09 I main.cpp:77]tid:139772876502784 -->>>      consumer_1 acquired lock, other consumers blocked
+2024-10-07 18:14:09 I main.cpp:81]tid:139772876502784 ---------- consumer_1 thread is blocked, waiting...
+2024-10-07 18:14:09 I main.cpp:42][Producer]:pushed package_5, queue size is 1
+2024-10-07 18:14:09 I main.cpp:42][Producer]:pushed package_6, queue size is 2
+2024-10-07 18:14:09 I main.cpp:42][Producer]:pushed package_7, queue size is 3
+2024-10-07 18:14:09 I main.cpp:42][Producer]:pushed package_8, queue size is 4
+2024-10-07 18:14:09 I main.cpp:45][Producer]:Activate all blocked threads
+2024-10-07 18:14:09 I main.cpp:87]tid:139772884895488 ----->>>>  consumer_0 unblocked by cv notice, allow to pop
+2024-10-07 18:14:09 I main.cpp:95]tid:139772884895488 ---------- consumer_0 poped package_5, current length 3, will release lock
+2024-10-07 18:14:09 I main.cpp:87]tid:139772876502784 ----->>>>  consumer_1 unblocked by cv notice, allow to pop
+2024-10-07 18:14:09 I main.cpp:95]tid:139772876502784 ---------- consumer_1 poped package_6, current length 2, will release lock
+2024-10-07 18:14:09 I main.cpp:74]tid:139772876502784 ->         consumer_1 started a new iter
+2024-10-07 18:14:09 I main.cpp:74]tid:139772884895488 ->         consumer_0 started a new iter
+2024-10-07 18:14:09 I main.cpp:77]tid:139772876502784 -->>>      consumer_1 acquired lock, other consumers blocked
+2024-10-07 18:14:09 I main.cpp:89]tid:139772876502784 ----->>>>  consumer_1 queue is not empty, allow to pop
+2024-10-07 18:14:09 I main.cpp:95]tid:139772876502784 ---------- consumer_1 poped package_7, current length 1, will release lock
+2024-10-07 18:14:09 I main.cpp:77]tid:139772884895488 -->>>      consumer_0 acquired lock, other consumers blocked
+2024-10-07 18:14:09 I main.cpp:89]tid:139772884895488 ----->>>>  consumer_0 queue is not empty, allow to pop
+2024-10-07 18:14:09 I main.cpp:95]tid:139772884895488 ---------- consumer_0 poped package_8, current length 0, will release lock
+2024-10-07 18:14:09 I main.cpp:74]tid:139772876502784 ->         consumer_1 started a new iter
+2024-10-07 18:14:09 I main.cpp:77]tid:139772876502784 -->>>      consumer_1 acquired lock, other consumers blocked
+2024-10-07 18:14:09 I main.cpp:81]tid:139772876502784 ---------- consumer_1 thread is blocked, waiting...
+2024-10-07 18:14:09 I main.cpp:74]tid:139772884895488 ->         consumer_0 started a new iter
+2024-10-07 18:14:09 I main.cpp:77]tid:139772884895488 -->>>      consumer_0 acquired lock, other consumers blocked
+2024-10-07 18:14:09 I main.cpp:81]tid:139772884895488 ---------- consumer_0 thread is blocked, waiting...
+2024-10-07 18:14:09 I main.cpp:42][Producer]:pushed package_9, queue size is 1
+2024-10-07 18:14:09 I main.cpp:42][Producer]:pushed package_10, queue size is 2
+2024-10-07 18:14:09 I main.cpp:42][Producer]:pushed package_11, queue size is 3
+2024-10-07 18:14:10 I main.cpp:42][Producer]:pushed package_12, queue size is 4
+2024-10-07 18:14:10 I main.cpp:45][Producer]:Activate all blocked threads
+2024-10-07 18:14:10 I main.cpp:87]tid:139772876502784 ----->>>>  consumer_1 unblocked by cv notice, allow to pop
+2024-10-07 18:14:10 I main.cpp:95]tid:139772876502784 ---------- consumer_1 poped package_9, current length 3, will release lock
+2024-10-07 18:14:10 I main.cpp:87]tid:139772884895488 ----->>>>  consumer_0 unblocked by cv notice, allow to pop
+2024-10-07 18:14:10 I main.cpp:95]tid:139772884895488 ---------- consumer_0 poped package_10, current length 2, will release lock
+2024-10-07 18:14:10 I main.cpp:74]tid:139772876502784 ->         consumer_1 started a new iter
+2024-10-07 18:14:10 I main.cpp:77]tid:139772876502784 -->>>      consumer_1 acquired lock, other consumers blocked
+2024-10-07 18:14:10 I main.cpp:74]tid:139772884895488 ->         consumer_0 started a new iter
+2024-10-07 18:14:10 I main.cpp:89]tid:139772876502784 ----->>>>  consumer_1 queue is not empty, allow to pop
+2024-10-07 18:14:10 I main.cpp:95]tid:139772876502784 ---------- consumer_1 poped package_11, current length 1, will release lock
+2024-10-07 18:14:10 I main.cpp:77]tid:139772884895488 -->>>      consumer_0 acquired lock, other consumers blocked
+2024-10-07 18:14:10 I main.cpp:89]tid:139772884895488 ----->>>>  consumer_0 queue is not empty, allow to pop
+2024-10-07 18:14:10 I main.cpp:95]tid:139772884895488 ---------- consumer_0 poped package_12, current length 0, will release lock
+2024-10-07 18:14:10 I main.cpp:74]tid:139772876502784 ->         consumer_1 started a new iter
+2024-10-07 18:14:10 I main.cpp:74]tid:139772884895488 ->         consumer_0 started a new iter
+2024-10-07 18:14:10 I main.cpp:77]tid:139772876502784 -->>>      consumer_1 acquired lock, other consumers blocked
+2024-10-07 18:14:10 I main.cpp:81]tid:139772876502784 ---------- consumer_1 thread is blocked, waiting...
+2024-10-07 18:14:10 I main.cpp:77]tid:139772884895488 -->>>      consumer_0 acquired lock, other consumers blocked
+2024-10-07 18:14:10 I main.cpp:81]tid:139772884895488 ---------- consumer_0 thread is blocked, waiting...
+2024-10-07 18:14:10 I main.cpp:42][Producer]:pushed package_13, queue size is 1
+2024-10-07 18:14:10 I main.cpp:42][Producer]:pushed package_14, queue size is 2
+2024-10-07 18:14:10 I main.cpp:42][Producer]:pushed package_15, queue size is 3
+2024-10-07 18:14:10 I main.cpp:42][Producer]:pushed package_16, queue size is 4
+2024-10-07 18:14:10 I main.cpp:45][Producer]:Activate all blocked threads
+2024-10-07 18:14:10 I main.cpp:87]tid:139772876502784 ----->>>>  consumer_1 unblocked by cv notice, allow to pop
+2024-10-07 18:14:10 I main.cpp:95]tid:139772876502784 ---------- consumer_1 poped package_13, current length 3, will release lock
+2024-10-07 18:14:10 I main.cpp:87]tid:139772884895488 ----->>>>  consumer_0 unblocked by cv notice, allow to pop
+2024-10-07 18:14:10 I main.cpp:95]tid:139772884895488 ---------- consumer_0 poped package_14, current length 2, will release lock
+2024-10-07 18:14:10 I main.cpp:74]tid:139772876502784 ->         consumer_1 started a new iter
+2024-10-07 18:14:10 I main.cpp:74]tid:139772884895488 ->         consumer_0 started a new iter
+2024-10-07 18:14:10 I main.cpp:77]tid:139772876502784 -->>>      consumer_1 acquired lock, other consumers blocked
+2024-10-07 18:14:10 I main.cpp:89]tid:139772876502784 ----->>>>  consumer_1 queue is not empty, allow to pop
+2024-10-07 18:14:10 I main.cpp:95]tid:139772876502784 ---------- consumer_1 poped package_15, current length 1, will release lock
+2024-10-07 18:14:10 I main.cpp:77]tid:139772884895488 -->>>      consumer_0 acquired lock, other consumers blocked
+2024-10-07 18:14:10 I main.cpp:89]tid:139772884895488 ----->>>>  consumer_0 queue is not empty, allow to pop
+2024-10-07 18:14:10 I main.cpp:95]tid:139772884895488 ---------- consumer_0 poped package_16, current length 0, will release lock
+2024-10-07 18:14:10 I main.cpp:74]tid:139772884895488 ->         consumer_0 started a new iter
+2024-10-07 18:14:10 I main.cpp:74]tid:139772876502784 ->         consumer_1 started a new iter
+2024-10-07 18:14:10 I main.cpp:77]tid:139772884895488 -->>>      consumer_0 acquired lock, other consumers blocked
+2024-10-07 18:14:10 I main.cpp:81]tid:139772884895488 ---------- consumer_0 thread is blocked, waiting...
+2024-10-07 18:14:10 I main.cpp:77]tid:139772876502784 -->>>      consumer_1 acquired lock, other consumers blocked
+2024-10-07 18:14:10 I main.cpp:81]tid:139772876502784 ---------- consumer_1 thread is blocked, waiting...
+```
