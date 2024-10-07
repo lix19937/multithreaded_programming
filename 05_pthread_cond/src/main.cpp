@@ -43,7 +43,7 @@ void* blocked_thread(void*) {
                                                                                          |
     s3, 一旦当前线程被唤醒之后，对mutex加锁，再返回             mutex_lock           ++++++++++++++++++++++         
 
-    s2- s3 期间，其他得到mutex的线程进行运行   
+    因此，在 s2- s3 期间，其他得到mutex的线程运行相关程序  ！！！     
   */
 
   // release lock
