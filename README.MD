@@ -1,4 +1,4 @@
-# multithreaded_programming cookbook
+# multithreaded_programming 
 
 
 ## Contents
