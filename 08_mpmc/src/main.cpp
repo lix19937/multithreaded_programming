@@ -1,35 +1,35 @@
-#include <pthread.h>
-#include <stdarg.h>
-#include <chrono>
-#include <memory>
 
+#include <pthread.h>
+#include <chrono>
+
+#include <map>
 #include <string>
 #include <thread>
 #include "logger.hpp"
 
 /*
- * 条件变量可以和互斥锁配合起来实现“生产者-消费者模型”
- *  - 条件变量负责阻塞
- *  - 互斥锁负责同步
+ * fixed pattern
+ * cv(pthread_cond_t) + mutex(pthread_mutex_t)
+ *  - cv for block
+ *  - mutex for sync
  *
- * 比如有一个队列，生产者负责往队列里放数据，消费者负责从队列中读取数据
- * 当队列里的数据如果空了，消费者就需要停止取出数据;
- * 同样的，当队列里的数据满了，生产者需要停止放数据
+ * for queue, producer push data, consumer pop data
+ * if queue is empty, consumer stop pop data
+ * if queue is full, producer stop push data
  *
- * 判断生产者和消费者与队列中数据的交互与否，可以通过”条件变量“(pthread_cond_t)来判断
- * pthread_cond_t可以用来实现阻塞线程的功能，以及存储唤醒被阻塞的线程的id
+ * pthread_cond_t used to block thread, and store the thread id of the wakeup thread
  *
- * 跟pthread相关的函数有:
  *
- *  pthread_cond_init              (初始化)
- *  pthread_cond_destroy           (销毁)
- *  pthread_cond_wait              (阻塞线程)
- *  pthread_cond_timedwait         (阻塞线程一定的时间，时间到了停止阻塞)
- *  pthread_cond_signal            (唤醒阻塞在条件变量上的线程)
- *  pthread_cond_broadcast         (唤醒阻塞在条件变量上的所有线程)
+ *  pthread_cond_init
+ *  pthread_cond_destroy
+ *  pthread_cond_wait              (block thread)
+ *  pthread_cond_timedwait         (block thread with limited time)
+ *  pthread_cond_signal            (wake up a   thread on the cv)
+ *  pthread_cond_broadcast         (wake up all thread on the cv)
  *
  */
 
+// use a link as a queue
 struct Package {
   int id;
   std::string status;
@@ -39,13 +39,15 @@ struct Package {
 pthread_cond_t cond;
 pthread_mutex_t mtx;
 
-const int min_count = 2;
+pthread_mutex_t hist_mtx;
+std::map<pthread_t, int> hist_table_;
+
+const int min_count = 4;
 int global_id = 0;
 int count = 0;
 auto head = std::make_shared<Package>();
 
 void* produce(void* args) {
-  /// loop generate
   while (1) {
     pthread_mutex_lock(&mtx);
     ///-------------------------------------
@@ -54,71 +56,99 @@ void* produce(void* args) {
       pack->id = global_id;
       pack->status = "newly produced";
       pack->next = head;
-      head = pack;
+      head = pack; ///
       ++global_id;
       ++count;
-      LOGI(PURPLE "[Producer]:Produce package %d, current length is %d", pack->id, count);
+      LOGI(PURPLE "[Producer]:push package_%d, current length %d, tid:%ld", pack->id, count, pthread_self());
 
+      /// or put follow outside ?
       if (count >= min_count) {
         LOGI(RED "[Producer]:Activate all blocked threads");
         pthread_cond_broadcast(&cond);
       }
     }
     ///---------------------------------------
+
+    pthread_mutex_unlock(&mtx);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(500)); // ms
+  }
+}
+
+void* consume(void* args) {
+  /*
+   * per t, pop data
+   *
+   * when link is empty, block consumer; unblock action is raised by producer thread
+   */
+  auto tid = pthread_self();
+
+  // for debug to show which consumer to pop
+  pthread_mutex_lock(&hist_mtx);
+  int len = hist_table_.size();
+  if (hist_table_.find(tid) == hist_table_.end()) {
+    hist_table_.insert(std::make_pair(tid, len));
+  }
+  pthread_mutex_unlock(&hist_mtx);
+
+  // for debug to show which way to lead to pop
+  bool is_cv_notice_state;
+
+  while (1) {
+    is_cv_notice_state = false;
+
+    LOGI("tid:%ld ->         consumer_%d started a new iter", tid, hist_table_[tid]);
+
+    pthread_mutex_lock(&mtx);
+
+    /*
+     * if a thread was blocked, pthread_cond_wait will do 3 things:
+     *   release mutex lock
+     *   commit cur thread in cv-queue and wait pthread_cond_signal/pthread_cond_broadcast call
+     *   lock mutex
+     */
+    LOGI("tid:%ld -->>>      consumer_%d acquired lock, other consumers blocked", tid, hist_table_[tid]);
+
+    // head->next == nullptr, means link has only one node
+    while (head->next == nullptr) {
+      LOGI(RED "tid:%ld ---------- consumer_%d thread is blocked, waiting...", tid, hist_table_[tid]);
+      pthread_cond_wait(&cond, &mtx);
+      is_cv_notice_state = true;
+    }
+
+    if (is_cv_notice_state) {
+      LOGI("tid:%ld ----->>>>  consumer_%d unblocked by cv notice, allow to pop", tid, hist_table_[tid]);
+    } else {
+      LOGI("tid:%ld ----->>>>  consumer_%d queue is not empty, allow to pop", tid, hist_table_[tid]);
+    }
+
+    auto pack = head;
+    count--;
+    head = head->next;
+    LOGI(
+        DGREEN "tid:%ld ---------- consumer_%d pop package_%d, current length %d, will release lock",
+        tid,
+        hist_table_[tid],
+        pack->id,
+        count);
+
     pthread_mutex_unlock(&mtx);
 
     std::this_thread::sleep_for(std::chrono::milliseconds(100)); // ms
   }
 }
 
-void* consume(void* args) {
-  /*
-   * 每隔 t 就从链表中取出元素。
-   * 由于设定的是consume会比produce的快，所以肯定会出现consume空的时候
-   * 当链表为空的时候就不要再取出元素了, 阻塞consumer线程
-   */
-  while (1) {
-    pthread_mutex_lock(&mtx);
-    {
-      /*
-       * 当链表为空的时候，就阻塞consumer线程。解除阻塞是在produser线程里进行的
-       * 如果某一个线程被阻塞了，那么pthread_cond_wait会解除对应的mutex lock，防止死锁的出现
-       * 当线程不再被阻塞了，那么抢到时间片的线程会自动给mutex lock上锁，实现原子操作。
-       */
-      while (head->next == nullptr) {
-        LOGI(RED "[Consumer]:The thread is blocked, waiting ...");
-        pthread_cond_wait(&cond, &mtx);
-      }
-
-      auto pack = head;
-      count--;
-      head = head->next;
-      LOGI(DGREEN "[Consumer]:Nonblocking consume package %d, current length is %d", pack->id, count);
-    }
-    pthread_mutex_unlock(&mtx);
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(10)); // ms
-  }
-}
-
 /*
- * 实现一个Consumer-Producer-Model(CPM)的一个基本操作
- * 设定的场景是:
+ * assume a case:
  *
- * 1. 消费者和生产者同时处理同一个链表
- * 2. 当链表为空，消费者停止消费并阻塞
- * 3. 当链表里的数据的个数大于某一个值的时候，生产者解除阻塞
- * 4. 消费者消费的速度要快于生产者
- * 5. 生产者生产不设置上限
- * 6. 生产者和消费者可以设置多个来并行
+ * 1. use the same link/queue
+ * 2. when link is empty, consume stop pop and block
+ * 3. when len(link) > t, producer block and noticed consumer
+ * 4. the speed of consumer > producer
+ * 5. consumer producer not work at the same time !!!
  *
- * 这个CPM案例producer会通过pthread_cond_broadcast来解除consumer的block
- *  (比如说，当链表中的数据大于某个值的时候再consume)
- *
- * 同样的，consumer也可以通过pthread_cond_broadcast来解除producer的block
- *  (比如说，当链表中的数据小于某个值的时候再produce)
- *
- * 需要注意的是，这种情况下需要使用两个不同的pthread_cond才行
+ * producer release the consumer block by pthread_cond_broadcast
+ * consumer release the producer block by pthread_cond_broadcast, like when len(link) < t, producer will be wakeup
  */
 
 int main() {
@@ -128,8 +158,8 @@ int main() {
   int producer_count = 1;
   int consumer_count = 2;
 
-  pthread_t* producers = (pthread_t*)malloc(producer_count * sizeof(pthread_t));
-  pthread_t* consumers = (pthread_t*)malloc(consumer_count * sizeof(pthread_t));
+  auto producers = (pthread_t*)malloc(producer_count * sizeof(pthread_t));
+  auto consumers = (pthread_t*)malloc(consumer_count * sizeof(pthread_t));
 
   for (int i = 0; i < producer_count; i++) {
     pthread_create(&producers[i], nullptr, produce, nullptr);
@@ -146,6 +176,7 @@ int main() {
     pthread_join(consumers[i], nullptr);
   }
 
+  // release
   pthread_mutex_destroy(&mtx);
   pthread_cond_destroy(&cond);
 
