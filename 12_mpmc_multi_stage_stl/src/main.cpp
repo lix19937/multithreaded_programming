@@ -23,7 +23,10 @@ std::mutex mtx_;
 // use two cv
 std::condition_variable cv_max_limit;
 std::condition_variable cv_min_limit;
-volatile bool over_limit = false;
+
+// sleep time of producer & consumer
+int t_producer = 100;
+int t_consumer = 500;
 
 /*
 std::condition_variable is a synchronization primitive used with a std::mutex to block one or more threads until another
@@ -76,7 +79,7 @@ void* produce(int id) {
     cv_min_limit.notify_all();
 
     // control speed of produce
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    std::this_thread::sleep_for(std::chrono::milliseconds(t_producer));
   }
   return NULL;
 }
@@ -110,7 +113,7 @@ void* consume(int id) {
     // Here if use notify_one will happen diff effect
     cv_max_limit.notify_all();
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    std::this_thread::sleep_for(std::chrono::milliseconds(t_consumer));
   }
   return NULL;
 }
