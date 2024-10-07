@@ -37,10 +37,13 @@ void* blocked_thread(void*) {
     https://linux.die.net/man/3/pthread_cond_wait
     https://docs.oracle.com/cd/E19120-01/open.solaris/816-5137/6mba5vq3s/index.html
 
-    释放mutex, 把当前线程放到condition的等待队列里     mutex_unlock;
-    等待被唤醒（当其它线程调用pthread_cond_signal或者pthread_cond_broadcast时）;
-    当前线程被唤醒之后，对mutex加锁，再返回             mutex_lock
+    s1, 释放mutex, 把当前线程放到condition的等待队列里     mutex_unlock               --------------------
+    s2, 等待被唤醒（即当其它线程调用pthread_cond_signal或者pthread_cond_broadcast时）     |
+                                                                                         |
+                                                                                         |
+    s3, 一旦当前线程被唤醒之后，对mutex加锁，再返回             mutex_lock           ++++++++++++++++++++++         
 
+    s2- s3 期间，其他得到mutex的线程进行运行   
   */
 
   // release lock
