@@ -1,3 +1,4 @@
+
 #include <chrono>
 #include <condition_variable>
 #include <mutex>
@@ -18,6 +19,8 @@ long unsigned int max_limit = 4;
 // product queue
 std::queue<Package> q_;
 std::mutex mtx_;
+
+// use two cv
 std::condition_variable cv_max_limit;
 std::condition_variable cv_min_limit;
 volatile bool over_limit = false;
@@ -33,10 +36,13 @@ Modify the shared variable while the lock is owned.
 Call notify_one or notify_all on the std::condition_variable (can be done after releasing the lock).
 */
 
-void* produce(void* args) {
+void* produce(int id) {
   while (1) {
     {
+      LOGI("producer_%d started a new iter", id);
+
       std::unique_lock<std::mutex> lock(mtx_);
+      LOGI("producer_%d acquired lock, other producers blocked", id);
       /*
        * when len(queue) == max_limit, block producer,
        * then consumer begin to pop, until len(queue) == min_limit, block consumer,
@@ -51,22 +57,20 @@ void* produce(void* args) {
       p.id = global_id;
       p.status = "newly produced";
       q_.push(p);
+      ++global_id;
+
       LOGI(
-          GREEN "%-10s:%-7s package_%d, now queue size is %ld|%ld, tid:%ld",
-          "Producer",
-          "pushed",
+          GREEN "producer_%d pushed package_%d, now queue size is %ld|%ld, will release lock",
+          id,
           p.id,
           q_.size(),
-          max_limit,
-          long(pthread_self()));
-      global_id++;
+          max_limit);
     }
 
     LOGI(
-        "%-10s notify_all, pred():%-6s, tid:%ld",
-        "Producer",
-        q_.size() > min_limit ? "true" : "false",
-        long(pthread_self()));
+        "producer_%d notify_all, pred():%-5s, if false, will not real wakeup",
+        id,
+        q_.size() > min_limit ? "true" : "false");
 
     // make sure mtx_ is release, so put notify_all outside
     cv_min_limit.notify_all();
@@ -74,15 +78,19 @@ void* produce(void* args) {
     // control speed of produce
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
   }
+  return NULL;
 }
 
-void* consume(void* args) {
+void* consume(int id) {
   while (1) {
     {
+      LOGI("consumer_%d started a new iter", id);
+
       std::unique_lock<std::mutex> lock(mtx_);
+      LOGI("consumer_%d acquired lock, other consumers blocked", id);
 
       /*
-       * get lock,
+       * acquired lock,
        * if consumer get cv_min_limit`s notify, then check `pred` function, {if len(queue) > min_limit} unblock
        * if consumer not get cv_min_limit`s notify, block
        *
@@ -91,27 +99,20 @@ void* consume(void* args) {
 
       Package p = q_.front();
       q_.pop();
-      LOGI(
-          RED "%-10s:%-7s package_%d, now queue size is %ld|%ld, tid:%ld",
-          "Consumer",
-          "poped",
-          p.id,
-          q_.size(),
-          min_limit,
-          long(pthread_self()));
+      LOGI(RED "consumer_%d poped package_%d, now queue size is %ld|%ld", id, p.id, q_.size(), min_limit);
     }
 
     LOGI(
-        "%-10s notify_all, pred():%-6s, tid:%ld\n",
-        "Consumer",
-        q_.size() < max_limit ? "true" : "false",
-        long(pthread_self()));
+        "consumer_%d notify_all, pred():%-5s, if false, will not real wakeup\n",
+        id,
+        q_.size() < max_limit ? "true" : "false");
 
-    /// Here if use notify_one will happen diff effect
+    // Here if use notify_one will happen diff effect
     cv_max_limit.notify_all();
 
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
   }
+  return NULL;
 }
 
 /*
@@ -130,20 +131,19 @@ void* consume(void* args) {
  * 1. block consumer, producer unblock, push queue until len(queue) >= min_limit, then consumer pred true
  * 2. block consumer, two speed keep the same
  */
-
 int main() {
   // we can adjust the count of producer/consumer to impl different speed
-  int producer_count = 2;
-  int consumer_count = 1;
+  int num_producer = 2;
+  int num_consumer = 2;
 
   std::vector<std::thread> producers;
   std::vector<std::thread> consumers;
 
-  for (int i = 0; i < producer_count; i++) {
-    producers.emplace_back(produce, nullptr);
+  for (int i = 0; i < num_producer; ++i) {
+    producers.emplace_back(produce, i);
   }
-  for (int i = 0; i < consumer_count; i++) {
-    consumers.emplace_back(consume, nullptr);
+  for (int i = 0; i < num_consumer; ++i) {
+    consumers.emplace_back(consume, i);
   }
 
   for (auto& producer : producers) {
