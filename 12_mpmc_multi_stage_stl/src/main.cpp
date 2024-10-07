@@ -68,7 +68,7 @@ void* produce(int id) {
     }
 
     LOGI(
-        "producer_%d notify_all, pred():%-5s, if false, will not real wakeup",
+        "producer_%d notify_all, pred():%s, if false, will not real wakeup",
         id,
         q_.size() > min_limit ? "true" : "false");
 
@@ -103,7 +103,7 @@ void* consume(int id) {
     }
 
     LOGI(
-        "consumer_%d notify_all, pred():%-5s, if false, will not real wakeup\n",
+        "consumer_%d notify_all, pred():%s, if false, will not real wakeup\n",
         id,
         q_.size() < max_limit ? "true" : "false");
 
