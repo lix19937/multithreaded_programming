@@ -41,9 +41,9 @@ Call notify_one or notify_all on the std::condition_variable (can be done after 
 
 void* produce(int id) {
   while (1) {
-    {
-      LOGI("producer_%d started a new iter", id);
+    LOGI("producer_%d started a new iter", id);
 
+    {
       std::unique_lock<std::mutex> lock(mtx_);
       LOGI("producer_%d acquired lock, other producers blocked", id);
       /*
@@ -64,25 +64,16 @@ void* produce(int id) {
       q_.push(p);
       ++global_id;
 
-      LOGI(
-          GREEN "producer_%d pushed package_%d, now queue size is %ld|%ld, will release lock",
-          id,
-          p.id,
-          q_.size(),
-          max_limit);
+      LOGI(GREEN "producer_%d pushed package_%d, now queue size is %ld, will release lock", id, p.id, q_.size());
     }
-
-    LOGI(
-        "producer_%d notify_all, pred():%s, if false, will not real wakeup",
-        id,
-        q_.size() > min_limit ? "true" : "false");
 
     // make sure mtx_ is release, so put notify_all outside
     cv_min_limit.notify_all();
 
     // control speed of produce
     std::this_thread::sleep_for(std::chrono::milliseconds(t_producer));
-  }
+  } // end of while
+
   return NULL;
 }
 
@@ -91,11 +82,10 @@ void* consume(int id) {
   bool is_cv_notice_state;
 
   while (1) {
+    LOGI("consumer_%d started a new iter", id);
+    is_cv_notice_state = false;
+
     {
-      is_cv_notice_state = false;
-
-      LOGI("consumer_%d started a new iter", id);
-
       std::unique_lock<std::mutex> lock(mtx_);
       LOGI("consumer_%d acquired lock, other consumers blocked", id);
 
@@ -106,6 +96,8 @@ void* consume(int id) {
        *
        */
       while (!(q_.size() > min_limit)) {
+        LOGI("consumer_%d meet the pred, will cv.wait... {release lock, block until cv-notice, acquire lock}", id);
+
         cv_min_limit.wait(lock);
         is_cv_notice_state = true;
       }
@@ -118,13 +110,8 @@ void* consume(int id) {
 
       Package p = q_.front();
       q_.pop();
-      LOGI(RED "consumer_%d poped package_%d, now queue size is %ld|%ld", id, p.id, q_.size(), min_limit);
+      LOGI(RED "consumer_%d poped package_%d, now queue size is %ld", id, p.id, q_.size());
     }
-
-    LOGI(
-        "consumer_%d notify_all, pred():%s, if false, will not real wakeup\n",
-        id,
-        q_.size() < max_limit ? "true" : "false");
 
     // Here if use notify_one will happen diff effect
     cv_max_limit.notify_all();
@@ -152,7 +139,7 @@ void* consume(int id) {
  */
 int main() {
   // we can adjust the count of producer/consumer to impl different speed
-  int num_producer = 2;
+  int num_producer = 1;
   int num_consumer = 2;
 
   std::vector<std::thread> producers;
