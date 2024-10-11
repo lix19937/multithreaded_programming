@@ -20,15 +20,15 @@
 |[15_mpmc](15_mpmc)| 多生产者-多消费者 |      |   
 |[16_mpmc_stl](16_mpmc_stl)|stl 多生产者-多消费者 |      |   
 |[17_mpmc_sem](17_mpmc_sem)| sem 多生产者-多消费者 |      |   
-|[18_mutex_lock_stl](18_mutex_lock_stl)|  |     |    
-|[19_mpmc_multi_stage_stl](19_mpmc_multi_stage_stl)|  |      |   
-|[20_mpmc_multi_stage_stl_eq](20_mpmc_multi_stage_stl_eq)|  |      |   
-|[21_mpmc_multi_stage_signal_stl](21_mpmc_multi_stage_signal_stl)|  |      |   
-|[22_mpmc_future_promise](22_mpmc_future_promise)|  |      |   
+|[18_mutex_lock_stl](18_mutex_lock_stl)| 互斥量与锁 |     |    
+|[19_mpmc_multi_stage_stl](19_mpmc_multi_stage_stl)| 多生产者-多消费者 多阶段  |      |   
+|[20_mpmc_multi_stage_stl_eq](20_mpmc_multi_stage_stl_eq)| 多生产者-多消费者 多阶段 |      |   
+|[21_mpmc_multi_stage_signal_stl](21_mpmc_multi_stage_signal_stl)| 多生产者-多消费者 多阶段加中断 |      |   
+|[22_mpmc_future_promise](22_mpmc_future_promise)| 等待线程输出 |      |   
 |[23_xxx](23_xxx) |   |      |   
 |[24_xxx](24_xxx)  |   |      |    
-|[25_threadpool_progschj](25_threadpool_progschj)|  |      |   
-|[26_threadpool](26_threadpool)|  |      |   
+|[25_threadpool_progschj](25_threadpool_progschj)| progschj 线程池 |      |   
+|[26_threadpool](26_threadpool)| 线程池 |      |   
 |[27_bounded_buffer](27_bounded_buffer)|  |      |   
 |[28_bounded_buffer_stl](28_bounded_buffer_stl)|  |      |   
 |[29_circular_buffer](29_circular_buffer)|  |      |   
