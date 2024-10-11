@@ -29,13 +29,13 @@
 |[24_xxx](24_xxx)  |   |      |    
 |[25_threadpool_progschj](25_threadpool_progschj)| progschj 线程池 |      |   
 |[26_threadpool](26_threadpool)| 线程池 |      |   
-|[27_bounded_buffer](27_bounded_buffer)|  |      |   
-|[28_bounded_buffer_stl](28_bounded_buffer_stl)|  |      |   
-|[29_circular_buffer](29_circular_buffer)|  |      |   
-|[30_spsc](30_spsc)|  |      |   
-|[31_lockfree_queue](31_lockfree_queue)|  |      |   
-|[32_queue](32_queue)|  |      |   
-|[33_mt](33_mt)|  |       |   
+|[27_bounded_buffer](27_bounded_buffer)| 有界缓冲区 |      |   
+|[28_bounded_buffer_stl](28_bounded_buffer_stl)|stl 有界缓冲区  |      |   
+|[29_circular_buffer](29_circular_buffer)| 环形缓冲区 |      |   
+|[30_spsc](30_spsc)| 单生产者-单消费者 |      |   
+|[31_lockfree_queue](31_lockfree_queue)| 无锁队列 |      |   
+|[32_queue](32_queue)| 队列 |      |   
+|[33_mt](33_mt)| 多线程 |       |   
 
 ## Known Limitations
 
